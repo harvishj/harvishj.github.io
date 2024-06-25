@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'  # Update to Node.js 16 or later
+
+      - name: Cache node modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Display Node.js version
+        run: node -v  # Check Node.js version
+
+      - name: Display npm version
+        run: npm -v  # Check npm version
+
+      - name: Install dependencies
+        run: npm install  # Use npm install to install dependencies
+
+      - name: Show npm error log if npm install fails
+        if: failure()
+        run: cat /home/runner/.npm/_logs/*-debug.log  # Output the npm debug log on failure
+
+      - name: List installed dependencies
+        run: npm ls  # List installed dependencies to check for issues
+
+      - name: Build project
+        run: npm run build
+
+      - name: List contents of dist directory
+        run: ls -la ./dist  # Add a step to list the contents of the dist directory
+
+      - name: Upload production-ready build files
+        uses: actions/upload-artifact@v3
+        with:
+          name: production-files
+          path: ./dist
+          if-no-files-found: error  # Ensure the job fails if no files are found
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3  # Ensure the repository is checked out for context
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: production-files
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.ACTIONS_DEPLOY_KEY }}  # Use the secret with the personal access token
+          publish_dir: ./dist
